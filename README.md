@@ -155,6 +155,9 @@ LM-MM-GKS is made available for research and educational purposes. The software 
 - Eric de Sturler — [sturler@vt.edu](mailto:sturler@vt.edu)
 - Misha E. Kilmer — [misha.kilmer@tufts.edu](mailto:misha.kilmer@tufts.edu)
 
+## Remark
+The code for this package has evolved to several versions from the initial version dating back in 2022. Claude code was minimally used to reorganize some of the functions and add visualization functionalities.
+
 ## Acknowledgments
 
 The work of Mirjeta Pasha is supported by the NSF under awards No. 2202846 and DMS 2410699. MP further acknowledges partial support from the NSF-AWM Mentoring Travel and the Isaac Newton Institute (INI) for Mathematical Sciences, Cambridge, for hospitality during the programme "Rich and Nonlinear Tomography -- a multidisciplinary approach" where partial work on this project was undertaken. The work by Eric de Sturler is based upon work supported by the National Science Foundation under Award No. 2208470. Misha Kilmer's work is partially supported by NSF HDR grant CCF-1934553 and NSF DMS-2410698. MK would like to acknowledge the Turner-Kirk Charitable Trust for the support provided by a Kirk Distinguished Visiting Fellowship to attend the aforementioned INI programme.
