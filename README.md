@@ -40,16 +40,6 @@ Mirjeta Pasha, Eric de Sturler, Misha E. Kilmer,
 git clone https://github.com/mpasha3/LM-MM-GKS
 ```
 
-##### Setup paths in MATLAB
-
-```matlab
-cd LMMGKS_Aug25_2026
-addpath(pwd)
-addpath('RMMGKS2')
-addpath('AIRToolsII-master'); AIRToolsII_setup
-addpath('IRTools'); IRtools_setup
-```
-
 ### Data
 
 | File | Used by |
@@ -57,20 +47,6 @@ addpath('IRTools'); IRtools_setup
 | `HSTgray.jpg` | Image deblurring (Hubble Space Telescope image) |
 
 CT and PAT test data are generated synthetically by `PRtomo` (AIR Tools II) and `generate_PAT_June17.m`.
-
-## Key Algorithmic Details
-
-The main algorithm (Algorithm 3.3 in the paper) alternates between:
-
-1. **Enlarge** (Algorithm 3.1): expands the search space by adding basis vectors, using the gradient of the *updated* quadratic tangent majorant. This change from standard MM-GKS is key to the convergence proof.
-2. **Compress** (Algorithm 3.2): reduces the search space to $k_{\min}$ vectors while always retaining the current solution and gradient/residual.
-
-Key parameters:
-- `kmax`: maximum search space dimension (memory budget)
-- `kmin` (passed as `r`): compressed dimension after each cycle
-- `kiter`: number of inner expansion steps per cycle
-- `iter`: number of outer expand-compress cycles
-- `epsilon`: smoothing parameter for the $\ell_1$ approximation
 
 ## Disclaimer
 
