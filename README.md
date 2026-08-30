@@ -14,7 +14,7 @@ LM-MM-GKS is a MATLAB package for solving large-scale edge-preserving inverse pr
 
 LM-MM-GKS solves regularized inverse problems of the form
 
-$$\min_{\mathbf{x}} \frac{1}{2}\|\mathbf{A}\mathbf{x} - \mathbf{d}\|_2^2 + \frac{\lambda}{q} \|\Psi \mathbf{x}\|_q^q, \quad 0 < q \leq 2,$$
+$$\min_{\mathbf{x}} \frac{1}{2}\lVert\mathbf{A}\mathbf{x} - \mathbf{d}\rVert_2^2 + \frac{\lambda}{q} \lVert\Psi \mathbf{x}\rVert_q^q, \quad 0 < q \leq 2,$$
 
 where $\Psi$ is a regularization operator (e.g., discrete gradient for edge preservation) and $\lambda$ is automatically selected via GCV on the small projected problem at each iteration.
 
