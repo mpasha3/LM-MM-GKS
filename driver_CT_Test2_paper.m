@@ -45,12 +45,11 @@ noise_levels = [0.001, 0.005];
 
 %% ========================================================================
 %  GENERATE DATA
-%  Generate one full system A with 180 angles, then randomly split rows into 6 subproblems.
 % =========================================================================
 fprintf('Generating clean streaming CT data (Test 2, 6 random subproblems)...\n');
 
 options = PRtomo('defaults');
-options.angles = linspace(0, 179, 180);  % 180 angles, 1 deg spacing
+options.angles = linspace(0, 179, 180); 
 [A_full_base, b_full_clean, x_true_vec] = PRtomo(N, options);
 b_full_clean = b_full_clean(:);
 x_true = x_true_vec(:);
@@ -65,7 +64,6 @@ blocksize = angles_per_sub * n_rays;
 rng(17, 'v4');
 angle_perm = randperm(n_angles);
 
-% Regularization operator
 LI = build_L1(nx, ny, 1);
 
 fprintf('  Image: %d x %d\n', N, N);
@@ -127,7 +125,7 @@ for ni = 1:n_noise
     RRE_MMGKSall = norm(x_MMGKSall(:) - x_true) / norm(x_true);
     fprintf('    RRE = %.4f\n', RRE_MMGKSall);
 
-    % ==== Method 4: LM-MM-GKS all (200 iters) ====
+    % ==== Method 4: LM-MM-GKS all ====
     fprintf('  4. LM-MM-GKS all (%d iters)...\n', iter_lmmgks*s);
     rng(17, 'v4');
     [x_LMMGKSall, ~, info_LMMGKSall, si_LMMGKSall] = ...
@@ -137,7 +135,7 @@ for ni = 1:n_noise
     [best_rre, best_iter] = min(rre_LMMGKSall);
     fprintf('    RRE = %.4f (best = %.4f at iter %d)\n', RRE_LMMGKSall, best_rre, best_iter);
 
-    % ==== Method 5: s-LM-MM-GKS fixed (360 total) ====
+    % ==== Method 5: s-LM-MM-GKS fixed ====
     fprintf('  5. s-LM-MM-GKS (fixed, %d total)...\n', iter_per_sub_fixed*s*nblocks);
     rng(17, 'v4');
     V_recycle = [];
@@ -157,7 +155,7 @@ for ni = 1:n_noise
     RRE_sLMMGKS = RRE_sLMMGKS_subs(nblocks);
     fprintf('    RRE = %.4f\n', RRE_sLMMGKS);
 
-    % ==== Method 6: s-LM-MM-GKS tol (tol=1e-3) ====
+    % ==== Method 6: s-LM-MM-GKS tol ====
     fprintf('  6. s-LM-MM-GKS (tol=%.0e, max %d/sub)...\n', tol_stream, max_outer_per_sub_tol*s);
     rng(17, 'v4');
     V_recycle_tol = [];

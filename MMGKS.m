@@ -75,47 +75,36 @@ for k = 1:iter
     x_old = x;
     t1 = cputime;
 
-    % Compute weights (paper eqs 2.1-2.3)
     wr = (u.^2 + epsilon^2).^(q/2 - 1);
 
-    % QR factorizations (paper eq 2.8)
     LL = bsxfun(@times, LV, wr.^(1/2));
     [QA, RA] = qr(AV, 0);
     [~, RL] = qr(LL, 0);
 
-    % Select lambda via GCV on projected problem (paper Section 2.3)
     [~, mu] = solveProjTikhonovGCV(RA * inv(RL), QA' * b);
     muHist = [muHist mu];
 
-    % Solve projected system (paper eq 2.9)
     y = [RA; sqrt(mu)*RL] \ [QA'*b; zeros(size(RL,1), 1)];
     x = V * y;
 
-    % Store solution and RRE
     saveX(:, k) = x;
     if ~isempty(x_true)
         Rerr(k+1) = norm(x - x_true(:)) / norm(x_true(:));
     end
 
-    % Update u = L*x via projected computation
     u = LV * y;
-
-    % Compute residual of regularized normal equations (paper eq 2.10)
     ra = A' * (AV*y - b);
     rb = L' * (wr .* (LV*y));
     r = ra + mu * rb;
 
-    % Reorthogonalize (twice for numerical stability)
     r = r - V * (V' * r);
     r = r - V * (V' * r);
 
-    % Check convergence
     if norm(x - x_old) / norm(x_old) < tol
         stop_flag = 'converged';
         break;
     end
 
-    % Enlarge subspace (paper eq 2.11)
     vn = r / norm(r);
     V = [V, vn];
     AV = [AV, A * vn];
@@ -125,7 +114,6 @@ for k = 1:iter
     savetime(k) = t2 - t1;
 end
 
-% Assemble output info
 info.saveX = saveX;
 info.Rerr = Rerr(1:k+1);
 info.iter = k;

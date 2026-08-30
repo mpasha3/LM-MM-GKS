@@ -5,7 +5,7 @@
 %             Inverse Problems".
 %
 % =========================================================================
-% Image deblurring experiment 
+% Image deblurring experiment
 %
 % Problem:
 %   500x500 Hubble telescope image, motion blur PSF (14x14 pixels),
@@ -15,12 +15,6 @@
 %   - MM-GKS (baseline, 25 iterations = memory capacity)
 %   - LM-MM-GKS with four compression approaches: TSVD, RBD, SOC, SEC
 %     for kmin = 5, 10, 15 with kmax = 25
-%
-% Outputs:
-%   - Table 1: RRE and HaarPSI for each compression and kmin
-%   - Figure 1: True image, PSF, blurred image
-%   - Figure 2: Reconstructions and error images
-%   - Figure 3: RRE convergence curves for all methods
 % =========================================================================
 clc
 clear all
@@ -30,18 +24,19 @@ rng(17, 'v4');
 %% ---- Setup paths ----
 directory = pwd;
 addpath(directory)
-addpath(fullfile(directory, 'RMMGKS2'))
+addpath(fullfile(directory, 'utilities'))
+addpath(fullfile(directory, 'HyBRrecycle'))
 addpath(fullfile(directory, 'AIRToolsII-master'))
 AIRToolsII_setup
 addpath(fullfile(directory, 'IRTools'))
 IRtools_setup
 
 %% ---- Output directory ----
-outdir = fullfile(pwd, 'results');
+outdir = fullfile(pwd, 'results', 'Deblurring');
 if ~exist(outdir, 'dir'), mkdir(outdir); end
 
 %% ========================================================================
-%  PROBLEM SETUP (Paper Section 7.1)
+%  PROBLEM SETUP 
 % =========================================================================
 fprintf('Setting up image deblurring problem...\n');
 
@@ -56,12 +51,12 @@ PSF1 = imresize(PSF1, 1.5);
 PSF = PSF1 / sum(PSF1(:));
 center = ceil(size(PSF) / 2);
 radius = ceil(max(size(PSF)) / 2);
+fprintf('  PSF size: %d x %d\n', size(PSF, 1), size(PSF, 2));
 
 % Forward operator
 A = Aclass(PSF, center, 'periodic', dd, dd);
 b_true = A * x_true;
 
-% Crop to remove PSF border effects
 x_true = x_true(radius+1:end-radius, radius+1:end-radius);
 b_true = b_true(radius+1:end-radius, radius+1:end-radius);
 [nx, ny] = size(x_true);
@@ -69,11 +64,10 @@ n = nx * ny;
 fprintf('  Image size: %d x %d (%d pixels)\n', nx, ny, n);
 fprintf('  Operator size: %d x %d\n', n, n);
 
-% Rebuild A for cropped size
+% Rebuild A 
 A = Aclass(PSF, center, 'periodic', nx, ny);
 b_true = b_true(:);
 
-% Add noise (0.1% Gaussian)
 rng(17, 'v4');
 sigma = 0.001;
 e_noise = randn(size(b_true));
@@ -89,21 +83,18 @@ fprintf('  Regularization operator size: %d x %d\n', size(LI, 1), size(LI, 2));
 %% ========================================================================
 %  ALGORITHM PARAMETERS (Paper Section 7.1)
 % =========================================================================
-q       = 1;          % l_1 regularization
-tol     = 0.01;       % inner convergence tolerance
-epsilon = 0.001;      % smoothing parameter
-kmax    = 25;         % max subspace dimension (memory capacity)
-kmin_values = [5, 10, 15];  % compressed dimensions to test
+q            = 1;          
+tol          = 1e-5;       
+epsilon      = 0.001;      
+kmax         = 25;         
+kmin_values  = [5, 10, 15];
+total_expand = 300;        
 
-% LM-MM-GKS iteration budget: iter x kiter = total max iterations
-iter    = 25;         % outer expand-compress cycles
-kiter   = 20;         % inner expansion steps per cycle (25 x 20 = 500 max)
-
-% MM-GKS baseline: stopped at kmax = 25 iterations (memory limit)
+% MM-GKS baseline: 
 mmgks_iter = kmax;
 
-fprintf('\n  Parameters: q=%d, epsilon=%.0e, kmax=%d, max_iter=%d\n', ...
-    q, epsilon, kmax, iter*kiter);
+fprintf('\n  Parameters: q=%d, epsilon=%.0e, tol=%.0e, kmax=%d, total_expand=%d\n', ...
+    q, epsilon, tol, kmax, total_expand);
 fprintf('  kmin values: [%s]\n', num2str(kmin_values));
 
 %% ========================================================================
@@ -121,7 +112,6 @@ HP_MMGKS  = HaarPSI(x_true(:), x_MMGKS(:));
 fprintf('  RRE = %.4f, HaarPSI = %.4f (%.1f sec) [%s]\n', ...
     RRE_MMGKS, HP_MMGKS, time_MMGKS, info_MMGKS.stop_flag);
 
-% Extract per-iteration RRE from info
 rre_MMGKS = info_MMGKS.Rerr;
 rre_MMGKS = rre_MMGKS(rre_MMGKS > 0);
 
@@ -134,8 +124,10 @@ rre_curves = struct();
 
 for ki = 1:length(kmin_values)
     kmin = kmin_values(ki);
-    s = kmax - kmin;  % expansion steps per cycle (so kmin + s = kmax)
-    fprintf('\n====== kmin = %d, kmax = %d (s = %d) ======\n', kmin, kmax, s);
+    s = kmax - kmin;
+    iter = total_expand / s;
+    fprintf('\n====== kmin = %d, kmax = %d, s = %d, iter = %d (total = %d) ======\n', ...
+        kmin, kmax, s, iter, iter*s);
 
     for ci = 1:length(compress_methods)
         cname = compress_methods{ci};
@@ -149,12 +141,15 @@ for ki = 1:length(kmin_values)
 
         RRE = norm(x_rec(:) - x_true(:)) / norm(x_true(:));
         HP  = HaarPSI(x_true(:), x_rec(:));
+        total_iters = info_rec.total_iter;
         sflag = info_rec.stop_flag;
-        fprintf('    RRE = %.4f, HaarPSI = %.4f (%.1f sec) [%s]\n', RRE, HP, elapsed, sflag);
+        fprintf('    RRE = %.4f, HaarPSI = %.4f, iters = %d/%d (%.1f sec) [%s]\n', ...
+            RRE, HP, total_iters, total_expand, elapsed, sflag);
         results(ki).(sprintf('RRE_%s', cname)) = RRE;
         results(ki).(sprintf('HP_%s', cname))  = HP;
         results(ki).(sprintf('time_%s', cname)) = elapsed;
         results(ki).(sprintf('stop_%s', cname)) = sflag;
+        results(ki).(sprintf('iters_%s', cname)) = total_iters;
         results(ki).kmin = kmin;
         if kmin == 5
             recs.(cname) = x_rec;
@@ -171,32 +166,37 @@ end
 fprintf('\n\n');
 fprintf('=========================================================================\n');
 fprintf('  TABLE 1: Image Deblurring — RRE and HaarPSI\n');
-fprintf('  kmax = %d, sigma = %.1f%%, max %d iterations\n', kmax, sigma*100, iter*kiter);
+fprintf('  kmax = %d, sigma = %.1f%%, tol = %.0e, max %d expansion steps\n', kmax, sigma*100, tol, total_expand);
 fprintf('=========================================================================\n');
 fprintf('  MM-GKS (%d iters): RRE = %.4f, HaarPSI = %.4f\n\n', mmgks_iter, RRE_MMGKS, HP_MMGKS);
 
-fprintf('  %4s  | %10s %10s %5s | %10s %10s %5s | %10s %10s %5s | %10s %10s %5s\n', ...
-    'kmin', 'TSVD RRE', 'TSVD HP', 'stop', 'RBD RRE', 'RBD HP', 'stop', ...
-    'SOC RRE', 'SOC HP', 'stop', 'SEC RRE', 'SEC HP', 'stop');
-fprintf('  %s\n', repmat('-', 1, 136));
+fprintf('  %4s  | %10s %10s %5s %5s | %10s %10s %5s %5s | %10s %10s %5s %5s | %10s %10s %5s %5s\n', ...
+    'kmin', 'TSVD RRE', 'TSVD HP', 'iter', 'stop', 'RBD RRE', 'RBD HP', 'iter', 'stop', ...
+    'SOC RRE', 'SOC HP', 'iter', 'stop', 'SEC RRE', 'SEC HP', 'iter', 'stop');
+fprintf('  %s\n', repmat('-', 1, 160));
 for ki = 1:length(kmin_values)
     r = results(ki);
     flags = {'TSVD', 'RBD', 'SOC', 'SEC'};
     short = cell(1,4);
+    iters = zeros(1,4);
     for fi = 1:4
         sf = r.(sprintf('stop_%s', flags{fi}));
+        iters(fi) = r.(sprintf('iters_%s', flags{fi}));
         if strcmp(sf, 'max_iter')
             short{fi} = 'max';
         else
             short{fi} = 'tol';
         end
     end
-    fprintf('  %4d  | %10.4f %10.4f %5s | %10.4f %10.4f %5s | %10.4f %10.4f %5s | %10.4f %10.4f %5s\n', ...
-        r.kmin, r.RRE_TSVD, r.HP_TSVD, short{1}, r.RRE_RBD, r.HP_RBD, short{2}, ...
-        r.RRE_SOC, r.HP_SOC, short{3}, r.RRE_SEC, r.HP_SEC, short{4});
+    fprintf('  %4d  | %10.4f %10.4f %5d %5s | %10.4f %10.4f %5d %5s | %10.4f %10.4f %5d %5s | %10.4f %10.4f %5d %5s\n', ...
+        r.kmin, r.RRE_TSVD, r.HP_TSVD, iters(1), short{1}, ...
+        r.RRE_RBD, r.HP_RBD, iters(2), short{2}, ...
+        r.RRE_SOC, r.HP_SOC, iters(3), short{3}, ...
+        r.RRE_SEC, r.HP_SEC, iters(4), short{4});
 end
 fprintf('=========================================================================\n');
-fprintf('  stop: ''tol'' = converged (rel_change or residual), ''max'' = max iterations reached\n');
+fprintf('  iter: actual expansion steps used\n');
+fprintf('  stop: ''tol'' = converged (rel_change <= %.0e), ''max'' = max iterations reached\n', tol);
 
 %% ========================================================================
 %  FIGURE 1: True image, PSF, blurred image
@@ -251,6 +251,35 @@ end
 sgtitle('Figure 2: Reconstructions (top) and Error Images (bottom)', 'FontSize', 13);
 exportgraphics(gcf, fullfile(outdir, 'fig2_reconstructions.pdf'), 'ContentType', 'vector');
 
+%% ---- Individual images for paper ----
+imgdir = fullfile(outdir, 'images');
+if ~exist(imgdir, 'dir'), mkdir(imgdir); end
+
+rec_names = {'deblurr_rec_MMGKS25', 'deblurr_rec_TSVD', 'deblurr_rec_RBD', ...
+             'deblurr_rec_sparsity', 'deblurr_rec_solo'};
+err_names = {'deblurr_err_MMGKS25', 'deblurr_err_SVD', 'deblurr_err_RBD', ...
+             'deblurr_err_sparsity', 'deblurr_err_solo'};
+
+for j = 1:5
+    figure('Visible','off');
+    imagesc(reshape(x_fig{j}, nx, ny), clim_rec); axis image off; colormap gray;
+    set(gca,'Position',[0 0 1 1]);
+    exportgraphics(gcf, fullfile(imgdir, [rec_names{j} '.jpg']), 'Resolution', 300); close
+
+    figure('Visible','off');
+    imagesc(reshape(x_fig{j}(:)-x_true(:), nx, ny), [-rev_color, 0]); axis image off; colormap gray;
+    set(gca,'Position',[0 0 1 1]);
+    exportgraphics(gcf, fullfile(imgdir, [err_names{j} '.jpg']), 'Resolution', 300); close
+end
+
+figure('Visible','off');
+imagesc(PSF); axis image off; colormap gray;
+set(findobj(gca,'Type','image'), 'Interpolation', 'nearest');
+set(gca,'Position',[0 0 1 1]);
+exportgraphics(gcf, fullfile(imgdir, 'PSF.jpg'), 'Resolution', 300); close
+
+fprintf('  Individual images saved to: %s\n', imgdir);
+
 %% ========================================================================
 %  FIGURE 3: RRE convergence curves (kmin=10)
 % =========================================================================
@@ -268,7 +297,7 @@ hold on;
 for ci = 1:length(compress_methods)
     cname = compress_methods{ci};
     rre = rre_curves.(cname);
-    final_rre = results(2).(sprintf('RRE_%s', cname)); 
+    final_rre = results(2).(sprintf('RRE_%s', cname));
     semilogy(1:length(rre), rre, [colors{ci} '-' markers{ci}], ...
         'LineWidth', 1.5, 'MarkerSize', 4, 'MarkerIndices', 1:10:length(rre), ...
         'DisplayName', sprintf('LM-MM-GKS %s (RRE=%.4f)', cname, final_rre));
@@ -287,7 +316,7 @@ exportgraphics(gcf, fullfile(outdir, 'fig3_convergence.pdf'), 'ContentType', 've
 % =========================================================================
 save(fullfile(outdir, 'deblurring_results.mat'), ...
     'results', 'RRE_MMGKS', 'HP_MMGKS', 'rre_MMGKS', 'rre_curves', ...
-    'kmin_values', 'kmax', 'sigma', 'iter', 'kiter', 'mmgks_iter');
+    'kmin_values', 'kmax', 'sigma', 'total_expand', 'tol', 'mmgks_iter');
 
 fid = fopen(fullfile(outdir, 'table1.dat'), 'w');
 fprintf(fid, 'kmin\tTSVD_RRE\tTSVD_HP\tRBD_RRE\tRBD_HP\tSOC_RRE\tSOC_HP\tSEC_RRE\tSEC_HP\n');

@@ -6,36 +6,6 @@
 %
 % =========================================================================
 % Paper Section 7.2: Dynamic Photoacoustic Tomography (PAT).
-%
-%   nt = 50 time steps, nx = ny = 256 pixels per image.
-%   49 equidistant angles at 5 deg intervals; time step i uses angles
-%   Total unknowns: 256*256*50 = 3,276,800.
-%   Psi: spatial (x,y) + temporal first derivatives, Psi in R^{9764864 x 3276800}.
-%   l_1 regularization (q = 1).
-%
-% Three methods compared:
-%   1. MM-GKS      — stopped at kmax = 15 iterations (memory-limited)
-%   2. MM-GKS_res  — restarted MM-GKS (lplq_res, DP adaptive, restart = 15)
-%                    Requires the lplq software package:
-%                    Buccini, A., & Reichel, L. (2024). Software for limited
-%                    memory restarted l^p-l^q minimization methods using
-%                    generalized Krylov subspaces. Electronic Transactions on
-%                    Numerical Analysis, 61, 66-91.
-%   3. LM-MM-GKS   — our method (TSVD compression, kmin = 5, kmax = 15)
-%
-% Methods 1 & 3: GCV regularization parameter selection, epsilon = 1e-3.
-% Method 2: DP with adaptive majorant, epsilon = 1.
-% Max iterations: 500 for all (MM-GKS stops at 15 due to memory).
-%
-% Noise levels for Table 3: sigma = 0.1%, 0.5%, 1%, 5%.
-% Figures (error images, RRE convergence, reconstructions) for sigma = 1%.
-%
-% Outputs:
-%   - Table 3: RRE, SSIM, PSNR for all methods and noise levels
-%   - Figure: Error images at t = 1,10,20,30,40,50 (sigma = 1%)
-%   - Figure: RRE convergence history (sigma = 1%)
-%   - Figure: True images and sinograms
-%   - Figure: Reconstruction images (sigma = 1%)
 % =========================================================================
 
 clc
@@ -63,26 +33,24 @@ if ~exist(outdir_dat, 'dir'), mkdir(outdir_dat); end
 %% ========================================================================
 %  PAPER PARAMETERS (Section 7.2)
 % =========================================================================
-nt      = 50;       % number of time steps
-nx      = 256;      % image size (nx x nx)
-q       = 1;        % l_1 regularization
-epsilon = 0.001;    % smoothing parameter (MM-GKS and LM-MM-GKS)
-kmin    = 5;        % compressed subspace dimension
-kmax    = 15;       % max subspace dimension / restart parameter
-s       = kmax - kmin;  % inner expansion steps per cycle (= 10)
-total_iter = 500;   % total inner iterations target
-iter    = total_iter / s;  % outer cycles: 500/10 = 50
-tol     = 1e-8;     % tight tolerance (run full iterations)
-mmgks_iter = kmax;  % MM-GKS stops at kmax = 15
+nt      = 50;       
+nx      = 256;     
+q       = 1;        
+epsilon = 0.001;    
+kmin    = 5;        
+kmax    = 15;       
+s       = kmax - kmin;  
+total_iter = 500;   
+iter    = total_iter / s;  
+tol     = 1e-8;     
+mmgks_iter = kmax; 
 
-noise_levels = [0.001, 0.005, 0.01, 0.05];  % 0.1%, 0.5%, 1%, 5%
+noise_levels = [0.001, 0.005, 0.01, 0.05];  
 
 %% ========================================================================
 %  GENERATE PAT DATA
-%  Paper: 49 angles at 5 deg intervals, 362 radii, 50 time steps
 % =========================================================================
 fprintf('Generating PAT data (nt=%d, nx=%d)...\n', nt, nx);
-% Generate with dummy sigma (we only use b_clean/B_clean from this call)
 [A, ~, Amat, ~, nx, ny, nt, ~, ~, x_true, b_clean, B_clean] = ...
     generate_PAT(nx, nx, nt, 1, 0.01);
 
@@ -93,7 +61,7 @@ fprintf('  Measurements per time step: %d\n', size(Amat{1}, 1));
 fprintf('  Total measurements: %d\n', length(b_clean));
 fprintf('  Total unknowns: %d\n', nx*ny*nt);
 
-%% ---- Build regularization operator (paper: spatial + temporal 1st derivatives) ----
+%% ---- Build regularization operator ----
 order = 1;
 [LI, ~] = build_L_R1a(nx, ny, nt, order);
 fprintf('  Regularization operator Psi: %d x %d\n', size(LI));
@@ -125,9 +93,7 @@ for ni = 1:n_noise
     noise_norm = norm(b - b_clean);
 
     % ==================================================================
-    %  METHOD 1: MM-GKS (Algorithm 2.1, stopped at kmax = 15)
-    %  Paper: "we show the reconstructions from MM-GKS at 15 iterations"
-    %  GCV regularization parameter, epsilon = 1e-3
+    %  METHOD 1: MM-GKS
     % ==================================================================
     fprintf('  1. MM-GKS (%d iterations, GCV, eps=%.0e)...\n', mmgks_iter, epsilon);
     rng(17, 'v4');
@@ -144,14 +110,14 @@ for ni = 1:n_noise
     fprintf('    RRE = %.4f, SSIM = %.4f, PSNR = %.2f\n', RRE_MMGKS, SSIM_MMGKS, PSNR_MMGKS);
 
     % ==================================================================
-    %  METHOD 2: MM-GKS_res (restarted MM-GKS, lplq_res)
+    %  METHOD 2: MM-GKS_res 
     % ==================================================================
     fprintf('  2. MM-GKS_res (lplq_res, DP adaptive, restart=%d, eps=1)...\n', kmax);
     opts = lplq_res('defaults');
     opts.p            = 2;
     opts.q            = q;
     opts.L            = LI;
-    opts.epsilon      = 1;          % as recommended in lplq documentation
+    opts.epsilon      = 1;          
     opts.tol          = 1e-8;
     opts.maxIt        = total_iter;
     opts.restart      = kmax;
@@ -187,7 +153,6 @@ for ni = 1:n_noise
         err_LMMGKS(i) = norm(saveX_LMMGKS(:,i) - x_true) / norm(x_true);
     end
 
-    % Inner-iteration RRE (force column, then transpose to row)
     Rerr_LMMGKS = [];
     for i = 1:length(saveinfo_inner_LMMGKS)
         ri = saveinfo_inner_LMMGKS{i};
@@ -216,7 +181,7 @@ for ni = 1:n_noise
     PSNR_table(ni, :) = [PSNR_MMGKS, PSNR_MMGKSres, PSNR_LMMGKS];
 
     % ==================================================================
-    %  FIGURES AND DATA FILES (only for sigma = 1%, the main paper case)
+    %  FIGURES AND DATA FILES
     % ==================================================================
     if abs(sigma - 0.01) < 1e-6
         fprintf('\n  Generating figures for sigma = 1%%...\n');

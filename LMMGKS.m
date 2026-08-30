@@ -73,12 +73,11 @@ if isempty(x_true), x_true = []; end
 b = b(:);
 x = A' * b;
 muHist = [];
-s = kiter;           % number of expansion steps per cycle
-kmax = r + s;        % max subspace dimension
+s = kiter;           
+kmax = r + s;        
 
 %% ====================================================================
 %  INITIALIZATION (paper Alg 3.3, lines 1-25)
-%  Either use provided V0 or build GKB + edge-aware seed basis.
 % =====================================================================
 if ~isempty(V0)
     V = V0;
@@ -102,7 +101,6 @@ if ~isempty(V0)
     x = V * y;
     u = L * x;
 else
-    % Step 1: Generate initial GKB subspace (paper Alg 3.3, line 10)
     ll = 15;
     [~, V, ~, ~] = GKB(A, b, ll);
     for j = 1:ll
@@ -110,40 +108,26 @@ else
         LV(:, j) = L * V(:, j);
     end
 
-    % Step 2: Compute initial weights, QR, and first solution
-    % (paper Alg 3.3, lines 11-13, 15-17, 20)
     u = L * x;
     wr = (u.^2 + e^2).^(q/2 - 1);
     [QA, RA] = qr(AV, 0);
     LL = bsxfun(@times, LV, wr.^(1/2));
     [~, RL] = qr(LL, 0);
 
-    % Select lambda^(0) via GCV (paper Alg 3.3, line 18)
     [~, mu] = solveProjTikhonovGCV(RA * inv(RL), QA' * b);
     muHist = [muHist mu];
 
-    % Compute z^(1) and x^(1) (paper Alg 3.3, line 20)
     y = [RA; sqrt(mu)*RL] \ [QA'*b; zeros(size(RL,1), 1)];
     x = V * y;
 
-    % Step 3: Update weights from x^(1) (paper Alg 3.3, line 21)
     u = L * x;
     wr_new = (u.^2 + e^2).^(q/2 - 1);
-    P_sq = wr_new;  % (P_epsilon^(1))^2 = diag(w_epsilon^(1))
+    P_sq = wr_new;  
 
-    % Step 4: Compute residual r^(1) with UPDATED weights
-    % (paper Alg 3.3, line 22)
-    % r^(1) = A^T(Ax^(1) - d) + lambda^(0) * Psi^T (P^(1))^2 Psi x^(1)
     r_init = A' * (A*x - b) + mu * L' * (P_sq .* (L*x));
 
-    % Step 5: Edge-aware seed basis (paper Alg 3.3, lines 23-24)
-    % Do k_min - 2 GKB steps on the preconditioned system:
-    %   K_{k_min-2}(A^T A + lambda^(0) Psi^T (P^(1))^2 Psi, A^T d)
-    % This builds a Krylov basis for the operator with edge information.
     kmin_gkb = max(r - 2, 1);
     Atd = A' * b;
-    % Build Krylov basis via Lanczos on the symmetric operator
-    % Q_k = A^T A + lambda * L^T diag(P_sq) L
     V_seed = zeros(length(Atd), kmin_gkb);
     v_cur = Atd / norm(Atd);
     V_seed(:, 1) = v_cur;
@@ -169,12 +153,8 @@ else
         end
     end
 
-    % Step 6: Combine seed basis with x^(1) and r^(1) via QR
-    % (paper Alg 3.3, line 25)
-    % V_{k_min} = updateQR([V_seed, x^(1), r^(1)])
     [V, ~] = qr([V_seed, x(:), r_init(:)], 0);
 
-    % Recompute AV, LV for the new V_{k_min}
     AV = [];
     LV = [];
     for j = 1:size(V, 2)
@@ -194,11 +174,9 @@ saveinfo_inner = {};
 stop_flag = 'max_iter';
 
 %% ====================================================================
-%  MAIN LOOP (paper Alg 3.3, lines 28-35)
-%  Alternating Enlarge (Alg 3.1) and Compress (Alg 3.2)
+%  MAIN LOOP
 % =====================================================================
 for k = 1:iter
-    % Save x before Enlarge for outer convergence check
     x_before_enlarge = x;
     t1 = cputime;
 
@@ -214,11 +192,8 @@ for k = 1:iter
     end
     u = L * x;
 
-    % --- COMPRESS (paper Algorithm 3.2) ---
-    % Compress to r-2 columns via chosen method, then add x and res
     V = compress_subspace(V, RA, RL, QA, b, y, res, x, mu, r, compress);
 
-    % Recompute AV, LV for compressed subspace
     AV = [];
     LV = [];
     for j = 1:size(V, 2)
@@ -229,7 +204,6 @@ for k = 1:iter
     t2 = cputime;
     savetime(k) = t2 - t1;
 
-    % --- OUTER CONVERGENCE CHECK (paper Alg 3.3, lines 32-34) ---
     rel_change = norm(x - x_before_enlarge) / norm(x_before_enlarge);
     res_norm = norm(res);
     if rel_change <= tol
@@ -260,20 +234,15 @@ end
 
 
 %% ========================================================================
-%  COMPRESS_SUBSPACE — paper Algorithm 3.2
-%  Compress V to r columns: r-2 via method + x + residual
+%  COMPRESS_SUBSPACE
 % =========================================================================
 function V = compress_subspace(V, RA, RL, QA, b, y, res, x, mu, r, method)
-% Paper Alg 3.2:
-%   1. Compute W (k_out x (k_min-2)) via compression method
-%   2. V_tilde = V * W                    (n x (k_min-2))
-%   3. [V_{k_min}, ~] = updateQR([V_tilde, x, r])   (n x k_min)
 
-r_compress = max(r - 2, 1);  % columns from compression (leave room for x and res)
+r_compress = max(r - 2, 1); 
 
 switch method
     case 'TSVD'
-        % Paper Section 5.1: truncated SVD of stacked matrix
+       
         RARL = [RA; sqrt(mu)*RL];
         [~, ~, VV] = svd(RARL);
         VV = VV(:, 1:r_compress);
@@ -284,14 +253,14 @@ switch method
         end
 
     case 'RBD'
-        % Paper Section 5.2: reduced basis decomposition
+
         RARL = [RA; sqrt(mu)*RL];
         [VV, ~] = RBD(RARL', 0.00001, r_compress);
         ncols = min(size(VV, 1), size(V, 2));
         V = V(:, 1:ncols) * VV;
 
     case 'SOC'
-        % Paper Section 5.3: solution-oriented (largest |y| components)
+
         epsTol = 1;
         Im = find(abs(y) > epsTol);
         [~, Jm] = maxk(abs(y), r_compress);
@@ -304,7 +273,7 @@ switch method
         V = V(:, Km);
 
     case 'SEC'
-        % Paper Section 5.4: sparsity-enforcing via IRLS/MM on L1 problem
+
         rhs_sec = QA' * b;
         rho = mu;
         eps_sec = 1e-4;
@@ -328,12 +297,10 @@ switch method
         V = V(:, Km);
 end
 
-% Add solution and residual to the subspace (paper Alg 3.2, line 4)
-% Equivalent to updateQR([V_tilde, x, r]): all columns mutually orthonormal.
 newv = x - V * (V' * x);
 newv = newv / norm(newv);
 V = [V, newv];
-new_res = res - V * (V' * res);   % orthogonalize against V INCLUDING newv
+new_res = res - V * (V' * res);   
 new_res = new_res / norm(new_res);
 V = [V, new_res];
 end
@@ -344,7 +311,6 @@ end
 % =========================================================================
 function [x, u, V, QA, RA, QL, RL, mu, info_inner, y, r] = ...
     enlarge_space(A, b, L, u, x, V, e, q, AV, LV, x_true, s, tol)
-% Paper Algorithm 3.1 (Enlarge)
 
 Rerr = [];
 if ~isempty(x_true)
@@ -353,19 +319,14 @@ end
 
 for k = 1:s
     x_old = x;
-
-    % Compute weights (paper Alg 3.1, line 2)
     wr = (u.^2 + e^2).^(q/2 - 1);
 
-    % QR factorizations (paper Alg 3.1, lines 4-5)
     LL = bsxfun(@times, LV, wr.^(1/2));
     [QA, RA] = qr(AV, 0);
     [QL, RL] = qr(LL, 0);
 
-    % Compute lambda via GCV (paper Alg 3.1, line 6)
     [~, mu] = solveProjTikhonovGCV(RA * inv(RL), QA' * b);
 
-    % Solve projected system (paper Alg 3.1, line 7)
     y = [RA; sqrt(mu)*RL] \ [QA'*b; zeros(size(RL,1), 1)];
     x = V * y;
 
@@ -373,28 +334,22 @@ for k = 1:s
         Rerr(k+1) = norm(x(:) - x_true(:)) / norm(x_true(:));
     end
 
-    % Update u = Psi * x^{(k+1)} (paper Alg 3.1, line 9)
+  
     u = LV * y;
 
     wr_new = (u.^2 + e^2).^(q/2 - 1);
-
-    % Compute residual with UPDATED weights (paper Alg 3.1, line 11)
-    % r^{(k+1)} = A^T(Ax^{(k+1)} - d) + lambda * Psi^T (P^{(k+1)})^2 u^{(k+1)}
     ra = A' * (AV*y - b);
     rb = L' * (wr_new .* (LV*y));
     r = ra + mu * rb;
 
-    % Reorthogonalize (paper Alg 3.1, line 12)
     r = r - V * (V' * r);
     r = r - V * (V' * r);
 
-    % Enlarge subspace (paper Alg 3.1, lines 13-16)
     vn = r / norm(r);
     V = [V, vn];
     AV = [AV, A * vn];
     LV = [LV, L * vn];
 
-    % Inner stopping criterion (paper Alg 3.1, lines 17-19)
     if norm(x_old - x) / norm(x_old) <= tol
         break;
     end

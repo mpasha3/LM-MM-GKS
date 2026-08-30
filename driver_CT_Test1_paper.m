@@ -3,29 +3,14 @@
 % Copyright: Mirjeta Pasha, Eric de Sturler, Misha Kilmer
 % Reference: "A Provably Convergent MM-GKS Variant for Large-Scale
 %             Inverse Problems".
+%
 % =========================================================================
 % Paper Section 7.2.1, Test 1: Streaming CT with 500x500 Shepp-Logan.
-% Problem:
-%   500x500 Shepp-Logan phantom, parallel tomography (IRTools).
-% Methods (7 total):
-%   1. HyBR 1st       — HyBR on first subproblem only
-%   2. MM-GKS 1st     — MM-GKS on first subproblem only
-%   3. HyBR all       — HyBR on full problem
-%   4. MM-GKS all     — MM-GKS on full problem
-%   5. LM-MM-GKS all  — LM-MM-GKS (TSVD) on full problem
-%   6. HyBR-rec       — HyBR-recycle streaming across 3 subproblems (GCV)
-%   7. s-LM-MM-GKS    — streaming LM-MM-GKS across 3 subproblems
-% All methods: 200 expansion steps, GCV reg param selection.
-% LM-MM-GKS: TSVD compression, kmin=10, kmax=40.
-% HyBR-recycle: nInner=kmax=40, max_mm=kmin=10 (matching LM-MM-GKS).
-% Figure 4: Reconstruction and error images (sigma = 0.1%)
-% Figure 5: RRE convergence (s-LM-MM-GKS, HyBR-rec, s-LM-MM-GKS tol)
 % =========================================================================
 clc
 clear all
 close all
 rng(17, 'v4');
-
 %% ---- Setup paths ----
 directory = pwd;
 addpath(directory)
@@ -42,7 +27,7 @@ outdir = fullfile(pwd, 'results', 'Test1');
 if ~exist(outdir, 'dir'), mkdir(outdir); end
 
 %% ========================================================================
-%  PAPER PARAMETERS (Section 7.2.1)
+%  PAPER PARAMETERS 
 % =========================================================================
 N       = 500;
 q       = 1;
@@ -50,7 +35,7 @@ epsilon = 0.001;
 kmin    = 10;
 kmax    = 40;
 s       = kmax - kmin;  
-maxit   = 200;          
+maxit   = 210;          
 tol     = 1e-8;         
 tol_stream = 1e-3;      
 
@@ -116,6 +101,7 @@ for ni = 1:n_noise
     end
     b1 = b_cell{1}; b2 = b_cell{2}; b3 = b_cell{3};
     b_full = [b1; b2; b3];
+
     % ==================================================================
     %  METHOD 1: HyBR on first subproblem
     % ==================================================================
@@ -126,6 +112,7 @@ for ni = 1:n_noise
     [x_HyBR1, output_HyBR1] = HyBR(A1, b1, [], input_h);
     RRE_HyBR1 = norm(x_HyBR1(:) - x_true) / norm(x_true);
     fprintf('    RRE = %.4f\n', RRE_HyBR1);
+
     % ==================================================================
     %  METHOD 2: MM-GKS on first subproblem
     % ==================================================================
@@ -134,6 +121,7 @@ for ni = 1:n_noise
     [x_MMGKS1, ~, info_MMGKS1] = MMGKS(A1, b1, LI, q, epsilon, maxit, tol, x_true);
     RRE_MMGKS1 = norm(x_MMGKS1(:) - x_true) / norm(x_true);
     fprintf('    RRE = %.4f\n', RRE_MMGKS1);
+
     % ==================================================================
     %  METHOD 3: HyBR on full problem
     % ==================================================================
@@ -144,6 +132,7 @@ for ni = 1:n_noise
     [x_HyBRall, output_HyBRall] = HyBR(A_full, b_full, [], input_h);
     RRE_HyBRall = norm(x_HyBRall(:) - x_true) / norm(x_true);
     fprintf('    RRE = %.4f\n', RRE_HyBRall);
+
     % ==================================================================
     %  METHOD 4: MM-GKS on full problem
     % ==================================================================
@@ -152,6 +141,7 @@ for ni = 1:n_noise
     [x_MMGKSall, ~, info_MMGKSall] = MMGKS(A_full, b_full, LI, q, epsilon, maxit, tol, x_true);
     RRE_MMGKSall = norm(x_MMGKSall(:) - x_true) / norm(x_true);
     fprintf('    RRE = %.4f\n', RRE_MMGKSall);
+
     % ==================================================================
     %  METHOD 5: LM-MM-GKS on full problem (TSVD)
     % ==================================================================
@@ -161,27 +151,39 @@ for ni = 1:n_noise
         LMMGKS(A_full, b_full, LI, q, epsilon, iter_outer, s, kmin, tol, 'TSVD', x_true);
     RRE_LMMGKSall = norm(x_LMMGKSall(:) - x_true) / norm(x_true);
     fprintf('    RRE = %.4f\n', RRE_LMMGKSall);
+
     % ==================================================================
     %  METHOD 6: HyBR-recycle (streaming, GCV)
     % ==================================================================
-    fprintf('  6. HyBR-recycle (GCV, nInner=%d, max_mm=%d)...\n', kmax, kmin);
-    trunc_options.nOuter = 6;
-    trunc_options.nInner = kmax;
+    hybrec_nInner = kmax;   
+    hybrec_nOuter = iter_per_sub;  
+    fprintf('  6. HyBR-recycle (DP, nOuter=%d, nInner=%d, max_mm=%d)...\n', hybrec_nOuter, hybrec_nInner, kmin);
+    trunc_options.nOuter = hybrec_nOuter;
+    trunc_options.nInner = hybrec_nInner;
     trunc_options.max_mm = kmin;
     trunc_options.compress = 'SVD';
-    trunc_mats = [];
+    trunc_options.nExpand = s;  
 
     rng(17, 'v4');
-    % Sub 1
+    [W_init, ~] = qr(randn(N*N, kmin), 0);
+    trunc_mats_init.W = W_init;
+    trunc_mats_init.Y = [];
+    trunc_mats_init.R = [];
+    trunc_mats_init.x = [];
+
     input_h = HyBRset('InSolv', 'Tikhonov', 'x_true', x_true, ...
-        'Iter', trunc_options.nInner, 'Reorth', 'on', 'RegPar', 'gcv', 'nLevel', sigma);
-    [~, tout_rec1, trunc_mats] = HyBRrecycle(A1, b1, [], input_h, trunc_options, trunc_mats);
+        'Iter', trunc_options.nInner, 'Reorth', 'on', 'RegPar', 'dp', ...
+        'nLevel', sigma, 'ResTol', [1e-15, 1e-15]);
+
+    % Sub 1
+    [~, tout_rec1, trunc_mats] = HyBRrecycle(A1, b1, [], input_h, trunc_options, trunc_mats_init);
     W = trunc_mats.W;
     trunc_mats.Y = []; trunc_mats.R = []; trunc_mats.x = []; trunc_mats.W = W;
 
     % Sub 2
     input_h = HyBRset('InSolv', 'Tikhonov', 'x_true', x_true, ...
-        'Iter', trunc_options.nInner, 'RegPar', 'gcv', 'nLevel', sigma);
+        'Iter', trunc_options.nInner, 'RegPar', 'dp', ...
+        'nLevel', sigma, 'ResTol', [1e-15, 1e-15]);
     [~, tout_rec2, trunc_mats] = HyBRrecycle(A2, b2, [], input_h, trunc_options, trunc_mats);
     W = trunc_mats.W;
     trunc_mats.Y = []; trunc_mats.R = []; trunc_mats.x = []; trunc_mats.W = W;
@@ -190,37 +192,38 @@ for ni = 1:n_noise
     [x_HyBRrec, tout_rec3, ~] = HyBRrecycle(A3, b3, [], input_h, trunc_options, trunc_mats);
     RRE_HyBRrec = norm(x_HyBRrec(:) - x_true) / norm(x_true);
 
-    e1h = tout_rec1.Enrm; e1h = e1h(1:min(200, length(e1h)));
-    e2h = tout_rec2.Enrm; e2h = e2h(1:min(200, length(e2h)));
-    e3h = tout_rec3.Enrm; e3h = e3h(1:min(200, length(e3h)));
+    e1h = tout_rec1.Enrm; e2h = tout_rec2.Enrm; e3h = tout_rec3.Enrm;
+    iters_HyBRrec = [length(e1h), length(e2h), length(e3h)];
     err_HyBRrec_hist = [e1h; e2h; e3h];
-    fprintf('    RRE = %.4f (%d iters)\n', RRE_HyBRrec, length(err_HyBRrec_hist));
+    fprintf('    RRE = %.4f (%d iters: %d+%d+%d)\n', RRE_HyBRrec, sum(iters_HyBRrec), iters_HyBRrec(1), iters_HyBRrec(2), iters_HyBRrec(3));
 
     % ==================================================================
-    %  METHOD 7: s-LM-MM-GKS
+    %  METHOD 7: s-LM-MM-GKS (streaming, fixed iters per subproblem)
     % ==================================================================
     fprintf('  7. s-LM-MM-GKS (streaming, fixed iters)...\n');
     rng(17, 'v4');
     V_recycle = [];
     rre_sLMMGKS_hist = [];
+    iters_sLMMGKS = zeros(1, 3);
     for p = 1:3
         [x_sub, ~, info_sub, si_sub] = ...
             LMMGKS(A_cell{p}, b_cell{p}, LI, q, epsilon, iter_per_sub, s, kmin, ...
             tol, 'TSVD', x_true, V_recycle);
         V_recycle = info_sub.oldV;
         rre_sLMMGKS_hist = [rre_sLMMGKS_hist; build_rre(si_sub)];
+        iters_sLMMGKS(p) = info_sub.total_iter;
     end
     x_sLMMGKS = x_sub;
     RRE_sLMMGKS = norm(x_sLMMGKS(:) - x_true) / norm(x_true);
     rre_sLMMGKS_hist = rre_sLMMGKS_hist(:)';
-    fprintf('    RRE = %.4f (%d iters)\n', RRE_sLMMGKS, length(rre_sLMMGKS_hist));
+    fprintf('    RRE = %.4f (%d iters: %d+%d+%d)\n', RRE_sLMMGKS, sum(iters_sLMMGKS), iters_sLMMGKS(1), iters_sLMMGKS(2), iters_sLMMGKS(3));
 
     % ---- Store Table 1 row ----
     RRE_table(ni, :) = [RRE_HyBR1, RRE_MMGKS1, RRE_HyBRall, RRE_MMGKSall, ...
                         RRE_LMMGKSall, RRE_HyBRrec, RRE_sLMMGKS];
 
     % ==================================================================
-    %  FIGURES 
+    %  FIGURES
     % ==================================================================
     if abs(sigma - 0.001) < 1e-6
         fprintf('\n  Generating figures for sigma = 0.1%%...\n');
@@ -232,7 +235,7 @@ for ni = 1:n_noise
 
         clim_rec = [0, max(x_true)];
 
-        % ---- LM-MM-GKS 1st (needed for Figure 4 only) ----
+        % ---- LM-MM-GKS 1st ------
         fprintf('    Running LM-MM-GKS 1st for Figure 4...\n');
         rng(17, 'v4');
         [x_LMMGKS1, ~, ~, ~] = ...
@@ -269,6 +272,7 @@ for ni = 1:n_noise
             exportgraphics(gcf, fullfile(outdir_fig, [row2_names{mi} '.jpg']), 'Resolution', 300); close
         end
 
+        % Row 3+4: HyBR all, HyBR-rec, MM-GKS all, LM-MM-GKS all
         row3_x = {x_HyBRall, x_HyBRrec, x_MMGKSall, x_LMMGKSall};
         row3_names = {'rec_tomo_stream_3prob_HyBR_all', 'rec_tomo_stream_3prob_HyBRrecycle_all', ...
                       'rec_tomo_stream_3prob_MMGKS_all', 'rec_tomo_stream_3prob_RMMGKS_all'};
@@ -285,6 +289,7 @@ for ni = 1:n_noise
         end
         fprintf('    Reconstruction images saved.\n');
 
+        % ---- Figure 5: RRE convergence ----
         fprintf('    Running s-LM-MM-GKS (tol) for Figure 5...\n');
         rng(17, 'v4');
         V_recycle_tol = [];
@@ -299,12 +304,18 @@ for ni = 1:n_noise
         rre_sLMMGKS_tol_hist = rre_sLMMGKS_tol_hist(:)';
         fprintf('      s-LM-MM-GKS (tol): RRE = %.4f (%d iters)\n', rre_sLMMGKS_tol_hist(end), length(rre_sLMMGKS_tol_hist));
 
-        rre_s = rre_sLMMGKS_hist(:);
-        T = table((1:length(rre_s))', rre_s, 'VariableNames', {'Iteration', 'RRE'});
+        npts_match = min(length(rre_sLMMGKS_hist), length(err_HyBRrec_hist));
+        rre_s_plot = rre_sLMMGKS_hist(1:npts_match);
+        err_h_plot = err_HyBRrec_hist(1:npts_match);
+        fprintf('    Matched iteration count: %d (s-LM-MM-GKS: %d, HyBR-rec: %d)\n', ...
+            npts_match, length(rre_sLMMGKS_hist), length(err_HyBRrec_hist));
+
+        rre_s = rre_s_plot(:);
+        T = table((1:npts_match)', rre_s, 'VariableNames', {'Iteration', 'RRE'});
         writetable(T, fullfile(outdir_dat, 'tomo_sLMMGKS.dat'), 'Delimiter', '\t', 'FileType', 'text');
 
-        err_h = err_HyBRrec_hist(:);
-        T = table((1:length(err_h))', err_h, 'VariableNames', {'Iteration', 'RRE'});
+        err_h = err_h_plot(:);
+        T = table((1:npts_match)', err_h, 'VariableNames', {'Iteration', 'RRE'});
         writetable(T, fullfile(outdir_dat, 'tomo_HyBRrec.dat'), 'Delimiter', '\t', 'FileType', 'text');
 
         rre_t = rre_sLMMGKS_tol_hist(:);
@@ -312,17 +323,19 @@ for ni = 1:n_noise
         writetable(T, fullfile(outdir_dat, 'tomo_sLMMGKS_tol.dat'), 'Delimiter', '\t', 'FileType', 'text');
         fprintf('    .dat files saved.\n');
 
-        mk1 = max(1, round(length(rre_sLMMGKS_hist)/15));
-        mk2 = max(1, round(length(err_HyBRrec_hist)/15));
+        % Plot Figure 5
+
+        mk1 = max(1, round(npts_match/15));
+        mk2 = max(1, round(npts_match/15));
         mk3 = max(1, round(length(rre_sLMMGKS_tol_hist)/15));
 
         fig5 = figure('Name', 'Paper Figure 5', 'NumberTitle', 'off', 'Position', [100 100 900 500]);
-        semilogy(1:length(rre_sLMMGKS_hist), rre_sLMMGKS_hist, 'b-*', ...
+        semilogy(1:npts_match, rre_s_plot, 'b-*', ...
             'LineWidth', 1.5, 'MarkerSize', 4, ...
-            'MarkerIndices', 1:mk1:length(rre_sLMMGKS_hist)), hold on
-        semilogy(1:length(err_HyBRrec_hist), err_HyBRrec_hist, 'r-o', ...
+            'MarkerIndices', 1:mk1:npts_match), hold on
+        semilogy(1:npts_match, err_h_plot, 'r-o', ...
             'LineWidth', 1.5, 'MarkerSize', 4, ...
-            'MarkerIndices', 1:mk2:length(err_HyBRrec_hist))
+            'MarkerIndices', 1:mk2:npts_match)
         semilogy(1:length(rre_sLMMGKS_tol_hist), rre_sLMMGKS_tol_hist, 'm-^', ...
             'LineWidth', 1.5, 'MarkerSize', 4, ...
             'MarkerIndices', 1:mk3:length(rre_sLMMGKS_tol_hist))
@@ -380,6 +393,7 @@ for k = 1:length(si)
     if isempty(si{k}), continue; end
     if isstruct(si{k}) && isfield(si{k}, 'Rerr')
         rr = si{k}.Rerr;
+        rr = rr(2:end); 
         rre = [rre; rr(:)];
     elseif isnumeric(si{k})
         rre = [rre; si{k}(:)];
