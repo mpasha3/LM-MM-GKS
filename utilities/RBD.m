@@ -1,8 +1,6 @@
 function [bases, TransMat] = RBD(data, tol, col, NormMat, StartingVec)
 % Inputs:
 %
-% Provide only the first three unless you understand what you are doing
-%
 % * data => the data matrix you want to decompose
 % * tol  => the accuracy you desire of your decomposition
 % * col  => the number of columns you can afford to have in the compressed

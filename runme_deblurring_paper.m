@@ -5,7 +5,7 @@
 %             Inverse Problems".
 %
 % =========================================================================
-% Image deblurring experiment (Paper Section 7.1).
+% Image deblurring experiment 
 %
 % Problem:
 %   500x500 Hubble telescope image, motion blur PSF (14x14 pixels),
@@ -21,17 +21,11 @@
 %   - Figure 1: True image, PSF, blurred image
 %   - Figure 2: Reconstructions and error images
 %   - Figure 3: RRE convergence curves for all methods
-%   - Results saved to results/ directory
-%
-% Usage:
-%   >> addpath(pwd, 'RMMGKS2', 'AIRToolsII-master', 'IRTools')
-%   >> AIRToolsII_setup; IRtools_setup
-%   >> runme_deblurring_paper
 % =========================================================================
-
 clc
 clear all
 close all
+rng(17, 'v4');
 
 %% ---- Setup paths ----
 directory = pwd;
@@ -157,20 +151,14 @@ for ki = 1:length(kmin_values)
         HP  = HaarPSI(x_true(:), x_rec(:));
         sflag = info_rec.stop_flag;
         fprintf('    RRE = %.4f, HaarPSI = %.4f (%.1f sec) [%s]\n', RRE, HP, elapsed, sflag);
-
-        % Store results
         results(ki).(sprintf('RRE_%s', cname)) = RRE;
         results(ki).(sprintf('HP_%s', cname))  = HP;
         results(ki).(sprintf('time_%s', cname)) = elapsed;
         results(ki).(sprintf('stop_%s', cname)) = sflag;
         results(ki).kmin = kmin;
-
-        % Store reconstruction for figures (use kmin=5)
         if kmin == 5
             recs.(cname) = x_rec;
         end
-
-        % Store RRE convergence curve (use kmin=10 for convergence plot)
         if kmin == 10
             rre_curves.(cname) = build_full_rre(info_rec, si_rec);
         end
@@ -178,7 +166,7 @@ for ki = 1:length(kmin_values)
 end
 
 %% ========================================================================
-%  TABLE 1 (Paper Table 1)
+%  TABLE 1
 % =========================================================================
 fprintf('\n\n');
 fprintf('=========================================================================\n');
@@ -193,7 +181,6 @@ fprintf('  %4s  | %10s %10s %5s | %10s %10s %5s | %10s %10s %5s | %10s %10s %5s\
 fprintf('  %s\n', repmat('-', 1, 136));
 for ki = 1:length(kmin_values)
     r = results(ki);
-    % Short stop labels: 'tol' for converged, 'max' for max iterations
     flags = {'TSVD', 'RBD', 'SOC', 'SEC'};
     short = cell(1,4);
     for fi = 1:4
@@ -281,7 +268,7 @@ hold on;
 for ci = 1:length(compress_methods)
     cname = compress_methods{ci};
     rre = rre_curves.(cname);
-    final_rre = results(2).(sprintf('RRE_%s', cname));  % kmin=10
+    final_rre = results(2).(sprintf('RRE_%s', cname)); 
     semilogy(1:length(rre), rre, [colors{ci} '-' markers{ci}], ...
         'LineWidth', 1.5, 'MarkerSize', 4, 'MarkerIndices', 1:10:length(rre), ...
         'DisplayName', sprintf('LM-MM-GKS %s (RRE=%.4f)', cname, final_rre));
@@ -302,7 +289,6 @@ save(fullfile(outdir, 'deblurring_results.mat'), ...
     'results', 'RRE_MMGKS', 'HP_MMGKS', 'rre_MMGKS', 'rre_curves', ...
     'kmin_values', 'kmax', 'sigma', 'iter', 'kiter', 'mmgks_iter');
 
-% Write table as .dat
 fid = fopen(fullfile(outdir, 'table1.dat'), 'w');
 fprintf(fid, 'kmin\tTSVD_RRE\tTSVD_HP\tRBD_RRE\tRBD_HP\tSOC_RRE\tSOC_HP\tSEC_RRE\tSEC_HP\n');
 for ki = 1:length(kmin_values)
