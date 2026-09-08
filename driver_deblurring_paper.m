@@ -222,16 +222,22 @@ exportgraphics(gcf, fullfile(outdir, 'fig1_setup.pdf'), 'ContentType', 'vector')
 %% ========================================================================
 %  FIGURE 2: Reconstructions and error images (kmin=5)
 % =========================================================================
-rev_color = 100;
 clim_rec = [min(x_true(:)), max(x_true(:))];
 
-figure('Position', [50 100 1100 400]);
-
-% Row 1: Reconstructions
 methods_fig = {'MMGKS', 'TSVD', 'RBD', 'SEC', 'SOC'};
 x_fig = {x_MMGKS, recs.TSVD, recs.RBD, recs.SEC, recs.SOC};
 rre_fig = cellfun(@(x) norm(x(:)-x_true(:))/norm(x_true(:)), x_fig);
 
+% Compute e_max across all methods
+e_max = 0;
+for j = 1:5
+    e_max = max(e_max, max(abs(x_fig{j}(:) - x_true(:))));
+end
+fprintf('  e_max = %.4f\n', e_max);
+
+figure('Position', [50 100 1100 400]);
+
+% Row 1: Reconstructions
 for j = 1:5
     subplot(2, 5, j);
     imagesc(reshape(x_fig{j}, nx, ny), clim_rec); axis image off; colormap gray;
@@ -242,10 +248,10 @@ for j = 1:5
     end
 end
 
-% Row 2: Error images
+% Row 2: Error images (normalized by e_max)
 for j = 1:5
     subplot(2, 5, 5+j);
-    imagesc(reshape(x_fig{j}(:)-x_true(:), nx, ny), [-rev_color, 0]); axis image off; colormap gray;
+    imagesc(reshape((x_fig{j}(:)-x_true(:)) / e_max, nx, ny), [-1, 0]); axis image off; colormap gray;
 end
 
 sgtitle('Figure 2: Reconstructions (top) and Error Images (bottom)', 'FontSize', 13);
@@ -267,7 +273,7 @@ for j = 1:5
     exportgraphics(gcf, fullfile(imgdir, [rec_names{j} '.jpg']), 'Resolution', 300); close
 
     figure('Visible','off');
-    imagesc(reshape(x_fig{j}(:)-x_true(:), nx, ny), [-rev_color, 0]); axis image off; colormap gray;
+    imagesc(reshape((x_fig{j}(:)-x_true(:)) / e_max, nx, ny), [-1, 0]); axis image off; colormap gray;
     set(gca,'Position',[0 0 1 1]);
     exportgraphics(gcf, fullfile(imgdir, [err_names{j} '.jpg']), 'Resolution', 300); close
 end

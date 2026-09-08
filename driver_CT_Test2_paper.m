@@ -186,7 +186,18 @@ for ni = 1:n_noise
         if ~exist(datdir, 'dir'), mkdir(datdir); end
 
         clim_rec = [0, max(x_true)];
-        rev_color = 1;
+
+        % ---- Compute e_max across all methods ----
+        rec_names = {'MMGKS_1st', 'LMMGKS_1st', 'MMGKS_all', 'LMMGKS_all', 'sLMMGKS'};
+        methods_x = {x_MMGKS1, x_LMMGKS1, x_MMGKSall, x_LMMGKSall, x_sLMMGKS};
+        e_max = 0;
+        for mi = 1:length(methods_x)
+            e_max = max(e_max, max(abs(methods_x{mi}(:) - x_true)));
+        end
+        for p = 1:nblocks
+            e_max = max(e_max, max(abs(x_sLMMGKS_tol_subs{p}(:) - x_true)));
+        end
+        fprintf('    e_max = %.4f\n', e_max);
 
         % ---- True image ----
         figure('Visible','off'); imagesc(reshape(x_true,N,N), clim_rec); axis image off; colormap gray;
@@ -209,15 +220,13 @@ for ni = 1:n_noise
         end
 
         % ---- Reconstructions and errors ----
-        rec_names = {'MMGKS_1st', 'LMMGKS_1st', 'MMGKS_all', 'LMMGKS_all', 'sLMMGKS'};
-        methods_x = {x_MMGKS1, x_LMMGKS1, x_MMGKSall, x_LMMGKSall, x_sLMMGKS};
         for mi = 1:5
             figure('Visible','off'); imagesc(reshape(methods_x{mi}, N, N), clim_rec); axis image off; colormap gray;
             set(gca,'Position',[0 0 1 1]);
             exportgraphics(gcf, fullfile(imgdir, sprintf('rec_%s.jpg', rec_names{mi})), 'Resolution', 300); close
 
             figure('Visible','off');
-            imagesc(reshape(methods_x{mi}(:)-x_true, N, N), [-rev_color, 0]); axis image off; colormap gray;
+            imagesc(reshape((methods_x{mi}(:)-x_true) / e_max, N, N), [-1, 0]); axis image off; colormap gray;
             set(gca,'Position',[0 0 1 1]);
             exportgraphics(gcf, fullfile(imgdir, sprintf('err_%s.jpg', rec_names{mi})), 'Resolution', 300); close
         end
@@ -229,7 +238,7 @@ for ni = 1:n_noise
             exportgraphics(gcf, fullfile(imgdir, sprintf('rec_stream_sub%d.jpg', p)), 'Resolution', 300); close
 
             figure('Visible','off');
-            imagesc(reshape(x_sLMMGKS_tol_subs{p}(:)-x_true, N, N), [-rev_color, 0]); axis image off; colormap gray;
+            imagesc(reshape((x_sLMMGKS_tol_subs{p}(:)-x_true) / e_max, N, N), [-1, 0]); axis image off; colormap gray;
             set(gca,'Position',[0 0 1 1]);
             exportgraphics(gcf, fullfile(imgdir, sprintf('err_stream_sub%d.jpg', p)), 'Resolution', 300); close
         end

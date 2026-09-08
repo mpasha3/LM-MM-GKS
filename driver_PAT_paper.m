@@ -195,8 +195,13 @@ for ni = 1:n_noise
         img_err_MMGKSres = reshape(x_MMGKSres(:) - x_true, nx, nx, []);
         img_err_LMMGKS   = reshape(x_LMMGKS(:)   - x_true, nx, nx, []);
 
+        % Compute e_max across all 3 methods and all time steps
+        e_max = max([max(abs(img_err_MMGKS(:))), ...
+                     max(abs(img_err_MMGKSres(:))), ...
+                     max(abs(img_err_LMMGKS(:)))]);
+        fprintf('    e_max = %.4f\n', e_max);
+
         time_indices = [1, 10, 20, 30, 40, 50];
-        kk = 0.25;  
 
         for idx = 1:length(time_indices)
             t = time_indices(idx);
@@ -241,24 +246,24 @@ for ni = 1:n_noise
             exportgraphics(fig, fullfile(outdir_fig, sprintf('rec_rec_%d.jpg', t)), 'Resolution', 300);
             close(fig)
 
-            % ---- Error images (paper Figure 7, inverted colormap) ----
+            % ---- Error images (normalized by e_max, displayed on [-1, 0]) ----
             % Row 1: MM-GKS at 15 iterations
             fig = figure('Visible', 'off');
-            imshow(img_err_MMGKS(:,:,t), [-kk, 0]);
+            imagesc(img_err_MMGKS(:,:,t) / e_max, [-1, 0]); axis image off; colormap gray;
             set(gca, 'Position', [0 0 1 1]);
             exportgraphics(fig, fullfile(outdir_fig, sprintf('err_MMGKS_%d.jpg', t)), 'Resolution', 300);
             close(fig)
 
             % Row 2: MM-GKS_res
             fig = figure('Visible', 'off');
-            imshow(img_err_MMGKSres(:,:,t), [-kk, 0]);
+            imagesc(img_err_MMGKSres(:,:,t) / e_max, [-1, 0]); axis image off; colormap gray;
             set(gca, 'Position', [0 0 1 1]);
             exportgraphics(fig, fullfile(outdir_fig, sprintf('err_res_%d.jpg', t)), 'Resolution', 300);
             close(fig)
 
             % Row 3: LM-MM-GKS
             fig = figure('Visible', 'off');
-            imshow(img_err_LMMGKS(:,:,t), [-kk, 0]);
+            imagesc(img_err_LMMGKS(:,:,t) / e_max, [-1, 0]); axis image off; colormap gray;
             set(gca, 'Position', [0 0 1 1]);
             exportgraphics(fig, fullfile(outdir_fig, sprintf('err_rec_%d.jpg', t)), 'Resolution', 300);
             close(fig)

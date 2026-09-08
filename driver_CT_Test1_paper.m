@@ -262,28 +262,37 @@ for ni = 1:n_noise
                       'rec_tomo_stream_3prob_RMMGKS_1st', 'rec_tomo_3prob_RMMGKS_3rd'};
         row2_names = {'err_tomo_stream_3prob_Hybr1st', 'err_tomo_stream_3prob_MMGKS1st', ...
                       'err_tomo_stream_3prob_RMMGKS1st', 'err_tomo_stream_3prob_RMMGKS_3rd'};
-        for mi = 1:4
-            figure('Visible','off'); imshow(reshape(row1_x{mi}, N, N), clim_rec, 'Border', 'tight');
-            set(gca,'Position',[0 0 1 1]);
-            exportgraphics(gcf, fullfile(outdir_fig, [row1_names{mi} '.jpg']), 'Resolution', 300); close
 
-            figure('Visible','off'); imagesc(reshape(row1_x{mi}(:) - x_true, N, N), [-1, 0]); axis image off; colormap gray;
-            set(gca,'Position',[0 0 1 1]);
-            exportgraphics(gcf, fullfile(outdir_fig, [row2_names{mi} '.jpg']), 'Resolution', 300); close
-        end
-
-        % Row 3+4: HyBR all, HyBR-rec, MM-GKS all, LM-MM-GKS all
         row3_x = {x_HyBRall, x_HyBRrec, x_MMGKSall, x_LMMGKSall};
         row3_names = {'rec_tomo_stream_3prob_HyBR_all', 'rec_tomo_stream_3prob_HyBRrecycle_all', ...
                       'rec_tomo_stream_3prob_MMGKS_all', 'rec_tomo_stream_3prob_RMMGKS_all'};
         row4_names = {'err_tomo_stream_3prob_HyBR_all', 'err_tomo_stream_3prob_HyBR_recycle_all', ...
                       'err_tomo_stream_3prob_MMGKS_all', 'err_tomo_stream_3prob_RMMGKS_all'};
+
+        % Compute e_max across all 8 methods
+        all_err_x = [row1_x, row3_x];
+        e_max = 0;
+        for mi = 1:length(all_err_x)
+            e_max = max(e_max, max(abs(all_err_x{mi}(:) - x_true)));
+        end
+        fprintf('    e_max = %.4f\n', e_max);
+
+        for mi = 1:4
+            figure('Visible','off'); imshow(reshape(row1_x{mi}, N, N), clim_rec, 'Border', 'tight');
+            set(gca,'Position',[0 0 1 1]);
+            exportgraphics(gcf, fullfile(outdir_fig, [row1_names{mi} '.jpg']), 'Resolution', 300); close
+
+            figure('Visible','off'); imagesc(reshape((row1_x{mi}(:) - x_true) / e_max, N, N), [-1, 0]); axis image off; colormap gray;
+            set(gca,'Position',[0 0 1 1]);
+            exportgraphics(gcf, fullfile(outdir_fig, [row2_names{mi} '.jpg']), 'Resolution', 300); close
+        end
+
         for mi = 1:4
             figure('Visible','off'); imshow(reshape(row3_x{mi}, N, N), clim_rec, 'Border', 'tight');
             set(gca,'Position',[0 0 1 1]);
             exportgraphics(gcf, fullfile(outdir_fig, [row3_names{mi} '.jpg']), 'Resolution', 300); close
 
-            figure('Visible','off'); imagesc(reshape(row3_x{mi}(:) - x_true, N, N), [-0.2, 0]); axis image off; colormap gray;
+            figure('Visible','off'); imagesc(reshape((row3_x{mi}(:) - x_true) / e_max, N, N), [-1, 0]); axis image off; colormap gray;
             set(gca,'Position',[0 0 1 1]);
             exportgraphics(gcf, fullfile(outdir_fig, [row4_names{mi} '.jpg']), 'Resolution', 300); close
         end
