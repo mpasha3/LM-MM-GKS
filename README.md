@@ -23,7 +23,7 @@ where $\Psi$ is a regularization operator (e.g., discrete gradient for edge pres
 Mirjeta Pasha, Eric de Sturler, Misha E. Kilmer,
 **A Provably Convergent MM-GKS Variant for Large-Scale Inverse Problems**
 #### Link of the paper
-[arXiv preprint - link TBD]
+[arXiv preprint - https://arxiv.org/pdf/2609.17229]
 
 ## Requirements
 
